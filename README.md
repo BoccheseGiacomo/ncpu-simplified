@@ -5,14 +5,15 @@ perform exact binary addition using sparse, single-cell inputs and outputs.
 Every cell applies the same local update rule. The operands are initial
 conditions; computation and memory must emerge in the evolving grid state.
 
-This project is inherited from and strongly inspired by
-[ichko/ncpu](https://github.com/ichko/ncpu), but is a fresh, reduced
-implementation with independent Git history. It blends that work with ideas
-from Béna and Faldor,
-[*A Path to Universal Neural Cellular Automata*](https://arxiv.org/abs/2505.13058),
-as an experiment in emergent computation. The long-term goal is a trainable
-program channel that selects different computations while retaining one shared
-NCA update rule.
+The primary inspiration for this project is Iliya Zhechev's
+[`ichko/ncpu`](https://github.com/ichko/ncpu). This repository is a fresh,
+reduced implementation with independent Git history, built to explore and
+extend that central idea. It is also informed by the
+[*Emergent Models: Intelligence from Tiny Substrates*](https://arxiv.org/abs/2608.14019)
+theoretical framework and by Béna and Faldor's
+[*A Path to Universal Neural Cellular Automata*](https://arxiv.org/abs/2505.13058).
+The long-term goal is a trainable program channel that selects different
+computations while retaining one shared NCA update rule.
 
 ## Canonical experiment
 
