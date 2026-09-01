@@ -5,6 +5,11 @@ perform exact binary addition using sparse, single-cell inputs and outputs.
 Every cell applies the same local update rule. The operands are initial
 conditions; computation and memory must emerge in the evolving grid state.
 
+![A neural cellular automaton computing 7 + 9 = 16, with its evolving RGB state and decoded sum](assets/addition.gif)
+
+An actual inference of **7 + 9 = 16** across 140 updates. RGB shows the three
+evolving channels; white outlines mark the original input and output locations.
+
 The primary inspiration for this project is Iliya Zhechev's
 [`ichko/ncpu`](https://github.com/ichko/ncpu). This repository is a fresh,
 reduced implementation with independent Git history, built to explore and
