@@ -15,112 +15,110 @@ theoretical framework and by Béna and Faldor's
 The long-term goal is a trainable program channel that selects different
 computations while retaining one shared NCA update rule.
 
-> [!WARNING]
-> This project is currently documented and tested only on Windows. Other
-> operating systems are not supported by the installation instructions, and
-> `visual_inference.bat` will not run outside Windows without replacement.
+## How it works
 
-> [!CAUTION]
-> This project has been AI-assisted by OpenAI Codex. Although it has been
-> tested, bugs or unexpected behaviours may still be present.
+Two numbers are placed on a grid, one bit per cell. A third column marks
+where their sum will be read, with an extra row for the carry bit. For a
+4-bit task, the layout looks like this (spacing and borders omitted):
 
-## Canonical experiment
-
-The default model follows the strongest compact no-gate setup from the
-development experiments:
-
-- two 4-bit operands and a 5-bit sum;
-- exact ternary cells: `-1` for zero, `+1` for one, and `0` for background;
-- three persistent and fully mutable state channels;
-- input implanted only in channel 0 at time zero;
-- identity, Sobel-X, and Sobel-Y fixed perception kernels;
-- one shared learnable 3x3 kernel initialized as a normalized Laplacian;
-- a 57-unit per-cell hidden layer and no residual write gate;
-- 70 unsupervised evolution steps followed by supervision on every state from
-  step 71 through step 140;
-- zero padding, matching the boundary condition used in the experiments.
-
-The default model has 921 trainable parameters. Configuration also supports a
-hardcoded Laplacian, `K` learnable shared kernels initialized from the
-Laplacian or from a reproducible random distribution, alternative gates,
-arbitrary channel counts, stochastic updates, geometry changes, and a frozen
-input channel.
-
-### Update schedule
-
-`ModelConfig.fire_rate` controls update synchrony. Its default value, `1.0`,
-updates every cell at every step. A value strictly between `0` and `1` enables
-asynchronous updates: each cell independently fires with that probability at
-each step. One firing decision is shared by all channels of a cell, so its
-state is updated as a unit.
-
-## Setup on Windows
-
-The supplied Conda environment targets Python 3.10, PyTorch 2.5.1, and CUDA
-12.1. Start PowerShell in the directory where you want the repository, then
-clone it and enter its root:
-
-```powershell
-git clone https://github.com/BoccheseGiacomo/ncpu-simplified.git
-Set-Location .\ncpu-simplified
+```text
+          S4
+A3   B3   S3
+A2   B2   S2
+A1   B1   S1
+A0   B0   S0
 ```
 
-Install from that repository root. These explicit paths do not require
-`conda activate` and match a standard Anaconda installation under your Windows
-user profile:
+`A` and `B` are the operands; `S` is the sum, with the least significant bit
+at the bottom. Input bits use `-1` for zero and `+1` for one, surrounded by
+neutral cells valued `0`. Output positions begin empty: the diagram labels
+where we read the answer, not extra symbols given to the model.
 
-```powershell
-$CondaExe = "$env:USERPROFILE\anaconda3\Scripts\conda.exe"
-$PythonExe = "$env:USERPROFILE\anaconda3\envs\slackenv\python.exe"
-& $CondaExe env update -n slackenv -f .\environment.yml
-& $PythonExe -m pip install -e ".[dev]"
-& $PythonExe -m pytest -q
-& $PythonExe -m black --check src tests
-& $PythonExe -m flake8 src tests
+Each cell holds a small vector of continuous state values. At every step, a
+shared neural network observes its local 3x3 neighbourhood and proposes an
+additive state update. In the default setup, inputs are written into channel 0
+only at the beginning. All three channels can then evolve, including channel
+0, while channels 1 and 2 provide additional space for computation and memory.
+There are no hand-written carry rules or connections between distant bits.
+
+Training unrolls these local updates through time. The model first evolves
+freely, then receives supervision over a window of steps rather than only at
+one final instant. The loss is mean squared error over output cells, examples,
+and supervised steps. This asks the model to produce an answer and retain it
+throughout that window; it does not guarantee stability indefinitely.
+
+## What this explores
+
+The central question is how much computation can emerge from a tiny shared
+rule, and which design choices help it learn reliable, reusable behaviour.
+The notebook lets you train on one operand width and test on larger widths
+without changing the learned rule. Good training accuracy alone is not
+evidence of general addition: extrapolation and stability need to be checked
+separately. Past experiments and their comparability limits are recorded in
+[EXPERIMENTS.md](EXPERIMENTS.md).
+
+The default experiment uses 4-bit operands, three state channels, a 57-unit
+hidden layer, and no write gate: just **921 trainable parameters**, shared by
+every cell. Perception combines fixed identity and Sobel filters with one
+learnable 3x3 kernel initialized as a normalized Laplacian. Evolution uses
+zero padding and 70 free steps followed by 70 supervised steps (71–140).
+
+You can vary the spacing and borders, channel count, hidden width, gates,
+rollout length, and supervision window. Inputs may evolve or remain frozen.
+Perception can include a fixed Laplacian and any number of learnable kernels,
+initialized from a Laplacian or reproducible random values.
+
+Updates are synchronous by default (`fire_rate=1.0`). Setting a rate strictly
+between `0` and `1` enables stochastic asynchronous updates: each cell has an
+independent chance to fire on each step, with one decision shared by all its
+channels. Selected cells still read the same pre-update grid state.
+
+## Getting started
+
+Clone the repository and run these commands from its root:
+
+```sh
+conda env create -f environment.yml
+conda activate slackenv
+python -m pip install -e ".[dev]"
+python -m pytest -q
 ```
 
-The editable installation is important: the notebook and local server import
-the same package tested by `pytest`. Run these commands from the repository
-root so that `.` identifies this checkout. If Anaconda is installed elsewhere,
-change only `$CondaExe` and `$PythonExe`.
+If `slackenv` already exists, replace the first command with
+`conda env update -n slackenv -f environment.yml`. The supplied environment
+targets Python 3.10, PyTorch 2.5.1, and CUDA 12.1. The editable installation
+lets the notebook, tests, and visualizer use the same local source code.
 
-## Notebook workflow
+## Working in the notebook
 
-Open [run/run.ipynb](run/run.ipynb) with the `slackenv` kernel. Its four code
-sections are:
+Open [run/run.ipynb](run/run.ipynb) with the `slackenv` kernel, for example in
+VS Code. Its four code cells take you through the experiment:
 
-1. imports, complete experiment settings, a grid and memory report, and the
-   fast `validate()` suite;
-2. training or exact checkpoint resumption;
-3. exhaustive validation at 4, 6, and 8 bits;
-4. an embedded RGB animation of one inference.
+1. Choose settings, run `validate()`, and inspect the grid, parameter count,
+   and memory estimate.
+2. Train the model or resume a checkpoint.
+3. Evaluate every input pair at 4, 6, and 8 bits.
+4. Watch an inference as an embedded RGB animation.
 
-Checkpoints are written to `checkpoints/`. That directory and all PyTorch
-checkpoint extensions are deliberately ignored by Git.
+Set `SEEDS` in the first cell to repeat the same experiment across independent
+seeds. Each run writes to `checkpoints/seed_N/`; the checkpoint with the lowest
+exhaustive validation loss is also saved as `checkpoints/best.pt`. Checkpoints
+are local artifacts and are not included in Git.
 
-Set `SEEDS` in the first cell to train one or more independent seeds. Each seed
-has isolated model and data randomness and writes under `checkpoints/seed_N/`.
-The best exhaustive validation checkpoint becomes `checkpoints/best.pt`.
+Optional W&B reporting can be enabled by installing
+`python -m pip install -e ".[tracking]"` and setting `WANDB_PROJECT` in the
+notebook. It is disabled by default.
 
-W&B reporting is disabled by default. To enable it, install the tracking extra
-and set `WANDB_PROJECT` in the notebook:
+## Watching the computation
 
-```powershell
-& "$env:USERPROFILE\anaconda3\envs\slackenv\python.exe" -m pip install -e ".[tracking]"
-```
+The browser visualizer lets you choose operands, change the bit width and
+rollout length, and play or scrub through the evolving grid. Channels 0, 1,
+and 2 appear as red, green, and blue, using `tanh` normalization for display
+only. This offers a view of the evolving state, not just the final answer.
 
-## Browser visualizer
-
-After training has created `checkpoints/best.pt`, run:
-
-```powershell
-.\visual_inference.bat
-```
-
-The script uses the `slackenv` interpreter directly and opens
-`http://127.0.0.1:8000`. Operands, bit width, rollout length, playback, and the
-time step can be changed in the page. Channels 0, 1, and 2 map to red, green,
-and blue after bounded `tanh` display normalization.
+After training creates `checkpoints/best.pt`, run
+[visual_inference.bat](visual_inference.bat) to open the visualizer at
+`http://127.0.0.1:8000`. **This `.bat` launcher is Windows-only.**
 
 ## Source layout
 
@@ -135,12 +133,12 @@ src/ncpu_simplified/
   visualize.py    GIF utilities and the local Flask server
 ```
 
-Past results and their comparability limits are recorded in
-[EXPERIMENTS.md](EXPERIMENTS.md).
-
 ## Attribution and licensing
 
 The architecture and experiments developed from the questions explored in
 `ichko/ncpu`, and that lineage should remain visible in derived work. The
 upstream repository does not currently include a license file. This repository
 therefore uses a clean implementation rather than copying its source.
+
+This project has been AI-assisted by OpenAI Codex. Although tested, bugs or
+unexpected behaviours may still be present.
