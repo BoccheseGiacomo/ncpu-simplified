@@ -135,5 +135,4 @@ Past results and their comparability limits are recorded in
 The architecture and experiments developed from the questions explored in
 `ichko/ncpu`, and that lineage should remain visible in derived work. The
 upstream repository does not currently include a license file. This repository
-therefore uses a clean implementation rather than copying its source. No
-separate license is granted here unless a license file is added later.
+therefore uses a clean implementation rather than copying its source.
