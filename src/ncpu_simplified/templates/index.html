@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ncpu-simplified</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    body { margin: 0; background: #111; color: #ddd; }
+    main { width: min(760px, calc(100% - 32px)); margin: 28px auto; }
+    .controls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    label { display: grid; gap: 5px; color: #aaa; font-size: 12px; }
+    input, button { box-sizing: border-box; width: 100%; padding: 8px; color: #ddd; background: #1b1b1b; border: 1px solid #444; }
+    button { cursor: pointer; }
+    #status { min-height: 20px; margin: 14px 0; color: #aaa; }
+    canvas { display: block; max-width: 100%; background: #808080; image-rendering: pixelated; border: 1px solid #333; }
+    .timeline { display: grid; grid-template-columns: 70px 1fr 75px; align-items: center; gap: 10px; margin-top: 14px; }
+    #step { width: 100%; }
+    @media (max-width: 600px) { .controls { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="controls">
+    <label>bits<input id="bits" type="number" min="1" max="16"></label>
+    <label>a<input id="a" type="number" min="0" value="3"></label>
+    <label>b<input id="b" type="number" min="0" value="5"></label>
+    <label>steps<input id="steps" type="number" min="1" max="1000"></label>
+  </div>
+  <div class="controls" style="margin-top:10px">
+    <button id="run">run</button>
+    <button id="play">play</button>
+  </div>
+  <div id="status"></div>
+  <canvas id="grid"></canvas>
+  <div class="timeline">
+    <span id="time">t = 0</span>
+    <input id="step" type="range" min="0" max="0" value="0">
+    <span id="output">out = 0</span>
+  </div>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  let data = null;
+  let timer = null;
+
+  async function initialize() {
+    const config = await fetch('/api/config').then(response => response.json());
+    $('bits').value = config.bits;
+    $('steps').value = config.steps;
+    $('status').textContent = `${config.checkpoint}, update ${config.update}, ${config.channels} channels`;
+    await run();
+  }
+
+  async function run() {
+    stop();
+    $('status').textContent = 'running inference...';
+    const response = await fetch('/api/infer', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        bits: Number($('bits').value),
+        a: Number($('a').value),
+        b: Number($('b').value),
+        steps: Number($('steps').value)
+      })
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      $('status').textContent = result.error;
+      return;
+    }
+    data = result;
+    $('step').max = data.frames.length - 1;
+    $('step').value = 0;
+    $('status').textContent = `expected ${data.expected}; RGB = tanh(channels 0, 1, 2)`;
+    draw(0);
+  }
+
+  function draw(index) {
+    if (!data) return;
+    const canvas = $('grid');
+    const scale = Math.max(4, Math.floor(700 / data.width));
+    canvas.width = data.width * scale;
+    canvas.height = data.height * scale;
+    const context = canvas.getContext('2d');
+    const frame = data.frames[index];
+    for (let y = 0; y < data.height; y++) {
+      for (let x = 0; x < data.width; x++) {
+        const [r, g, b] = frame[y][x];
+        context.fillStyle = `rgb(${r},${g},${b})`;
+        context.fillRect(x * scale, y * scale, scale, scale);
+      }
+    }
+    $('time').textContent = `t = ${index}`;
+    $('output').textContent = `out = ${data.outputs[index]}`;
+    $('step').value = index;
+  }
+
+  function stop() {
+    if (timer !== null) clearInterval(timer);
+    timer = null;
+    $('play').textContent = 'play';
+  }
+
+  function togglePlay() {
+    if (!data) return;
+    if (timer !== null) { stop(); return; }
+    $('play').textContent = 'pause';
+    timer = setInterval(() => {
+      const next = (Number($('step').value) + 1) % data.frames.length;
+      draw(next);
+    }, 80);
+  }
+
+  $('run').addEventListener('click', run);
+  $('play').addEventListener('click', togglePlay);
+  $('step').addEventListener('input', event => { stop(); draw(Number(event.target.value)); });
+  initialize().catch(error => { $('status').textContent = error; });
+</script>
+</body>
+</html>

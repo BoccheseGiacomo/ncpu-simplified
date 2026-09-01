@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ncpu-simplified"
+version = "0.1.0"
+description = "A compact neural cellular automaton for spatial binary addition"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "flask>=3.0,<4",
+    "ipykernel>=6.29,<7",
+    "ipywidgets>=8.1,<9",
+    "jupyterlab>=4.2,<5",
+    "matplotlib>=3.8,<4",
+    "numpy>=1.26,<3",
+    "pillow>=10,<12",
+    "torch>=2.5,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9"]
+tracking = ["wandb>=0.19,<1"]
+
+[project.scripts]
+ncpu-visualize = "ncpu_simplified.visualize:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ncpu_simplified = ["templates/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
