@@ -146,5 +146,15 @@ The architecture and experiments developed from the questions explored in
 upstream repository does not currently include a license file. This repository
 therefore uses a clean implementation rather than copying its source.
 
+Compared with the [original NCPU adder](https://github.com/ichko/ncpu/blob/22c69de7b7df7f576e27e6879a06345374da92b4/scripts/train_adder.py), this implementation defaults to a
+smaller 3-channel, 57-hidden-unit rule; a mutable input in channel 0 rather
+than a frozen duplicate in channel 1; and synchronous updates (`fire_rate=1`)
+rather than stochastic updates at `fire_rate=0.5`. It also replaces large bit
+patches and 7x7 perception with parametrically spaced single cells and 3x3
+perception with configurable fixed and learnable filters, and separates free
+evolution from the supervised time window. The
+local, shared, additive NCA update and zero-padded boundary remain conceptually
+the same.
+
 This project has been AI-assisted by OpenAI Codex. Although tested, bugs or
 unexpected behaviours may still be present.
