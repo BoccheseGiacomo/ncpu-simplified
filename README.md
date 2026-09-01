@@ -5,6 +5,8 @@ perform exact binary addition using sparse, single-cell inputs and outputs.
 Every cell applies the same local update rule. The operands are initial
 conditions; computation and memory must emerge in the evolving grid state.
 
+![Single-cell input/output geometry with centre-to-centre strides sx and sy, four independent borders, and an extra carry row](assets/geometry.svg)
+
 ![A neural cellular automaton computing 7 + 9 = 16, with its evolving RGB state and decoded sum](assets/addition.gif)
 
 An actual inference of **7 + 9 = 16** across 140 updates. RGB shows the three
@@ -23,16 +25,15 @@ computations while retaining one shared NCA update rule.
 ## How it works
 
 Two numbers are placed on a grid, one bit per cell. A third column marks
-where their sum will be read, with an extra row for the carry bit. For a
-4-bit task, the layout looks like this (spacing and borders omitted):
+where their sum will be read, with an extra row for the carry bit. The diagram
+above shows the default 4-bit geometry.
 
-```text
-          S4
-A3   B3   S3
-A2   B2   S2
-A1   B1   S1
-A0   B0   S0
-```
+The horizontal and vertical strides, `sx` and `sy`, are independent parameters
+in `GeometryConfig`, easily changed in the notebook's first cell. They measure
+centre-to-centre spacing, so a stride of 3 leaves 2 empty cells between bit
+positions. The four borders are independently configurable too: each counts
+complete empty rows or columns, with the top border measured above the carry
+row.
 
 `A` and `B` are the operands; `S` is the sum, with the least significant bit
 at the bottom. Input bits use `-1` for zero and `+1` for one, surrounded by
