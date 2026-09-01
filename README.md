@@ -15,6 +15,15 @@ theoretical framework and by Béna and Faldor's
 The long-term goal is a trainable program channel that selects different
 computations while retaining one shared NCA update rule.
 
+> [!WARNING]
+> This project is currently documented and tested only on Windows. Other
+> operating systems are not supported by the installation instructions, and
+> `visual_inference.bat` will not run outside Windows without replacement.
+
+> [!CAUTION]
+> This project has been AI-assisted by OpenAI Codex. Although it has been
+> tested, bugs or unexpected behaviours may still be present.
+
 ## Canonical experiment
 
 The default model follows the strongest compact no-gate setup from the
@@ -40,16 +49,32 @@ input channel.
 ## Setup on Windows
 
 The supplied Conda environment targets Python 3.10, PyTorch 2.5.1, and CUDA
-12.1:
+12.1. Start PowerShell in the directory where you want the repository, then
+clone it and enter its root:
 
 ```powershell
-conda env update -n slackenv -f .\environment.yml
-& "$env:USERPROFILE\anaconda3\envs\slackenv\python.exe" -m pip install -e ".[dev]"
-& "$env:USERPROFILE\anaconda3\envs\slackenv\python.exe" -m pytest -q
+git clone https://github.com/BoccheseGiacomo/ncpu-simplified.git
+Set-Location .\ncpu-simplified
+```
+
+Install from that repository root. These explicit paths do not require
+`conda activate` and match a standard Anaconda installation under your Windows
+user profile:
+
+```powershell
+$CondaExe = "$env:USERPROFILE\anaconda3\Scripts\conda.exe"
+$PythonExe = "$env:USERPROFILE\anaconda3\envs\slackenv\python.exe"
+& $CondaExe env update -n slackenv -f .\environment.yml
+& $PythonExe -m pip install -e ".[dev]"
+& $PythonExe -m pytest -q
+& $PythonExe -m black --check src tests
+& $PythonExe -m flake8 src tests
 ```
 
 The editable installation is important: the notebook and local server import
-the same package tested by `pytest`.
+the same package tested by `pytest`. Run these commands from the repository
+root so that `.` identifies this checkout. If Anaconda is installed elsewhere,
+change only `$CondaExe` and `$PythonExe`.
 
 ## Notebook workflow
 
