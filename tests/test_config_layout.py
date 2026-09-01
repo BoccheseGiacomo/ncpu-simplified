@@ -34,6 +34,7 @@ def test_invalid_geometry_is_rejected(config):
         ModelConfig(learnable_kernel_init="invalid"),
         ModelConfig(gate="invalid"),
         ModelConfig(fire_rate=0),
+        ModelConfig(fire_rate=1.01),
         ModelConfig(input_channel=3),
         ModelConfig(input_mode="invalid"),
         ModelConfig(channels=1, input_mode="frozen"),

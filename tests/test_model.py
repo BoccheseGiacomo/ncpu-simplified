@@ -95,6 +95,62 @@ def test_mutable_input_channel_can_evolve():
     assert not torch.equal(evolved[:, 0], initial[:, 0])
 
 
+def test_default_fire_rate_updates_every_cell_without_sampling(monkeypatch):
+    model = NeuralCellularAutomaton(ModelConfig())
+    state = torch.zeros(2, 3, 2, 2)
+
+    def constant_delta(perception):
+        return torch.ones(
+            perception.shape[0],
+            model.config.channels,
+            perception.shape[2],
+            perception.shape[3],
+            device=perception.device,
+            dtype=perception.dtype,
+        )
+
+    monkeypatch.setattr(model.rule, "forward", constant_delta)
+    monkeypatch.setattr(
+        torch,
+        "rand",
+        lambda *args, **kwargs: pytest.fail("synchronous updates must not sample"),
+    )
+
+    assert model.config.fire_rate == 1.0
+    assert torch.equal(model.step(state), torch.ones_like(state))
+
+
+def test_asynchronous_fire_rate_updates_whole_cells_independently(monkeypatch):
+    model = NeuralCellularAutomaton(ModelConfig(fire_rate=0.5))
+    state = torch.zeros(2, 3, 2, 2)
+    draws = torch.tensor(
+        [
+            [[[0.1, 0.9], [0.8, 0.2]]],
+            [[[0.7, 0.3], [0.4, 0.6]]],
+        ]
+    )
+
+    def constant_delta(perception):
+        return torch.ones(
+            perception.shape[0],
+            model.config.channels,
+            perception.shape[2],
+            perception.shape[3],
+            device=perception.device,
+            dtype=perception.dtype,
+        )
+
+    def fixed_draws(*shape, device=None):
+        assert shape == (2, 1, 2, 2)
+        return draws.to(device=device)
+
+    monkeypatch.setattr(model.rule, "forward", constant_delta)
+    monkeypatch.setattr(torch, "rand", fixed_draws)
+
+    expected = (draws < 0.5).expand_as(state).to(state.dtype)
+    assert torch.equal(model.step(state), expected)
+
+
 def test_perception_preserves_grid_size_for_every_padding_mode():
     state = torch.randn(2, 3, 8, 9)
     for padding in ("zeros", "reflect", "replicate", "circular"):

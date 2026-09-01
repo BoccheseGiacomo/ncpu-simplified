@@ -46,6 +46,14 @@ Laplacian or from a reproducible random distribution, alternative gates,
 arbitrary channel counts, stochastic updates, geometry changes, and a frozen
 input channel.
 
+### Update schedule
+
+`ModelConfig.fire_rate` controls update synchrony. Its default value, `1.0`,
+updates every cell at every step. A value strictly between `0` and `1` enables
+asynchronous updates: each cell independently fires with that probability at
+each step. One firing decision is shared by all channels of a cell, so its
+state is updated as a unit.
+
 ## Setup on Windows
 
 The supplied Conda environment targets Python 3.10, PyTorch 2.5.1, and CUDA
