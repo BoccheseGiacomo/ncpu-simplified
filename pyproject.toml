@@ -15,7 +15,7 @@ dependencies = [
     "jupyterlab>=4.2,<5",
     "matplotlib>=3.8,<4",
     "numpy>=1.26,<3",
-    "pillow>=10,<12",
+    "pillow>=10.1,<12",
     "torch>=2.5,<3",
 ]
 

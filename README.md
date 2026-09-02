@@ -104,7 +104,7 @@ VS Code. Its four code cells take you through the experiment:
    and memory estimate.
 2. Train the model or resume a checkpoint.
 3. Evaluate every input pair at 4, 6, and 8 bits.
-4. Watch an inference as an embedded RGB animation.
+4. Inspect an inference in a larger interactive player and export an annotated GIF.
 
 Set `SEEDS` in the first cell to repeat the same experiment across independent
 seeds. Each run writes to `checkpoints/seed_N/`; the checkpoint with the lowest
@@ -117,10 +117,22 @@ notebook. It is disabled by default.
 
 ## Watching the computation
 
-The browser visualizer lets you choose operands, change the bit width and
-rollout length, and play or scrub through the evolving grid. Channels 0, 1,
-and 2 appear as red, green, and blue, using `tanh` normalization for display
-only. This offers a view of the evolving state, not just the final answer.
+The notebook and browser share the same viewer: marked input/output ports,
+RGB or individual-channel views, raw cell values, a prominent decoded answer,
+and playback controls. Channels 0, 1, and 2 map to red, green, and blue; zero
+state is gray. Color scales use `tanh` for display only and stay fixed over time.
+
+Inference length is independent of training: set `INFERENCE_STEPS = 200` in
+the notebook's fourth cell, or choose **Steps** in the server (up to 1000).
+The timestep and status appear below the answer: free evolution (red), the
+supervision window, then beyond the training window. These phases refer to the
+checkpoint's training schedule; inference never applies supervision or forces
+the expected answer. Longer runs do not guarantee that an answer stays stable.
+
+The notebook player is self-contained and needs no server. Its width follows
+the notebook output area; `notebook_viewer(..., height=1100)` controls its height.
+Rerun the fourth cell to change operands or inference length. The same cell
+also saves `run/inference.gif`, with port labels, timestep, and decoded output.
 
 After training creates `checkpoints/best.pt`, run
 [visual_inference.bat](visual_inference.bat) to open the visualizer at

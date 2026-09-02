@@ -16,3 +16,6 @@ def test_notebook_has_four_executable_sections():
     assert "train_seeds(" in sources[1]
     assert "evaluate_widths(" in sources[2]
     assert "save_gif(" in sources[3]
+    assert "notebook_viewer(" in sources[3]
+    assert "INFERENCE_STEPS =" in sources[3]
+    assert "INFERENCE_STEPS = trained_config.training.rollout_steps" not in sources[3]

@@ -3,120 +3,288 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ncpu-simplified</title>
+  <title>ncpu-simplified · inference</title>
   <style>
-    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
-    body { margin: 0; background: #111; color: #ddd; }
-    main { width: min(760px, calc(100% - 32px)); margin: 28px auto; }
-    .controls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-    label { display: grid; gap: 5px; color: #aaa; font-size: 12px; }
-    input, button { box-sizing: border-box; width: 100%; padding: 8px; color: #ddd; background: #1b1b1b; border: 1px solid #444; }
+    :root { color-scheme: light dark; font: 14px/1.5 system-ui, sans-serif;
+      --bg: light-dark(#fafbfc, #161a1f); --fg: light-dark(#20262d, #e7ebef);
+      --muted: light-dark(#515d6c, #b5bfcb); --line: light-dark(#d8dde3, #39414b);
+      --field: light-dark(#fff, #20262e); --red: light-dark(#bc3030, #ff8585); }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); }
+    main { width: min(1100px, calc(100% - 32px)); margin: 18px auto; }
+    header, .controls, .playback, footer { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+    header { justify-content: space-between; margin-bottom: 14px; }
+    header strong { font-weight: 500; }
+    .secondary { font-size: 12px; color: var(--muted); }
+    .controls { margin-bottom: 12px; }
+    label { display: flex; align-items: center; gap: 6px; }
+    input, select, button { font: inherit; color: inherit; accent-color: light-dark(#405369, #bccde2); }
+    input[type=number], select, button { padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--field); }
+    input[type=number] { width: 78px; }
     button { cursor: pointer; }
-    #status { min-height: 20px; margin: 14px 0; color: #aaa; }
-    canvas { display: block; max-width: 100%; background: #808080; image-rendering: pixelated; border: 1px solid #333; }
-    .timeline { display: grid; grid-template-columns: 70px 1fr 75px; align-items: center; gap: 10px; margin-top: 14px; }
-    #step { width: 100%; }
-    @media (max-width: 600px) { .controls { grid-template-columns: repeat(2, 1fr); } }
+    button:disabled { opacity: .5; cursor: default; }
+    #error { color: var(--red); margin: 8px 0; }
+    #loading { margin: 8px 0; }
+    .viewer { border-top: 1px solid var(--line); padding-top: 12px; }
+    .body { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 20px; }
+    .figure { min-width: 0; }
+    canvas { display: block; width: 100%; image-rendering: pixelated; }
+    aside { padding-top: 16px; }
+    #decoded { font-size: 48px; line-height: 1.15; font-weight: 500; font-variant-numeric: tabular-nums; margin: 4px 0; overflow-wrap: anywhere; }
+    #phase[data-phase="Free evolution"] { color: var(--red); }
+    #time { font-variant-numeric: tabular-nums; }
+    #expected { margin-top: 10px; }
+    #binary { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+    .port-key { display: flex; gap: 7px; align-items: center; margin-top: 8px; }
+    .port-mark { display: inline-block; width: 15px; height: 15px; border: 2px solid currentColor; }
+    .port-mark.input { border-style: dashed; }
+    .keys { margin-top: 18px; }
+    #legend { margin: 12px 0 0; }
+    .legend-row { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 7px; margin: 4px 0; }
+    .scale { height: 11px; }
+    .ticks { position: relative; height: 22px; }
+    .ticks span { position: absolute; transform: translateX(-50%); }
+    #inspector { font: 12px/1.6 ui-monospace, Consolas, monospace; border-top: 1px solid var(--line); margin-top: 14px; padding-top: 8px; min-height: 34px; overflow-wrap: anywhere; }
+    .playback { margin-top: 14px; }
+    #step { flex: 1; min-width: 90px; }
+    #window-bar { height: 3px; margin-top: 12px; }
+    #window-labels { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 14px; margin-top: 5px; }
+    footer { justify-content: space-between; margin-top: 14px; }
+    [hidden] { display: none !important; }
+    @media (max-width: 580px) { main { width: calc(100% - 24px); } .body { grid-template-columns: 1fr; gap: 0; } aside { padding-top: 8px; } }
+    @media (pointer: coarse) { input[type=number], select, button { min-height: 44px; font-size: 16px; } label:has(input[type=checkbox]) { min-height: 44px; } }
   </style>
 </head>
 <body>
 <main>
-  <div class="controls">
-    <label>bits<input id="bits" type="number" min="1" max="16"></label>
-    <label>a<input id="a" type="number" min="0" value="3"></label>
-    <label>b<input id="b" type="number" min="0" value="5"></label>
-    <label>steps<input id="steps" type="number" min="1" max="1000"></label>
-  </div>
-  <div class="controls" style="margin-top:10px">
-    <button id="run">run</button>
-    <button id="play">play</button>
-  </div>
-  <div id="status"></div>
-  <canvas id="grid"></canvas>
-  <div class="timeline">
-    <span id="time">t = 0</span>
-    <input id="step" type="range" min="0" max="0" value="0">
-    <span id="output">out = 0</span>
-  </div>
+  <header><strong>ncpu / inference</strong><span id="checkpoint" class="secondary"></span></header>
+  {% if embedded_data is none %}
+  <form id="inference" class="controls">
+    <label>Bits <input id="bits" type="number" min="1" max="16" step="1" required></label>
+    <label>A <input id="a" type="number" min="0" step="1" value="3" required></label>
+    <label>B <input id="b" type="number" min="0" step="1" value="5" required></label>
+    <label>Steps <input id="steps" type="number" min="1" max="1000" step="1" required></label>
+    <button id="run" type="submit">Run inference</button>
+  </form>
+  {% endif %}
+  <p id="loading" class="secondary" role="status" hidden>Running inference…</p>
+  <p id="error" role="alert" hidden></p>
+  <section class="viewer" id="viewer" hidden>
+    <div class="controls">
+      <span id="operands" class="secondary"></span>
+      <label>View <select id="view" aria-label="Channel view"></select></label>
+      <label><input id="ports" type="checkbox" checked> Ports</label>
+    </div>
+    <div class="body">
+      <div class="figure">
+        <canvas id="grid" role="img" aria-label="NCA state, input ports A and B, output ports O. Most significant bits and carry at the top."></canvas>
+        <div id="legend" class="secondary"></div>
+      </div>
+      <aside>
+        <div class="secondary">Decoded now</div>
+        <div id="decoded">—</div>
+        <div id="time"></div>
+        <div class="secondary">Status: <span id="phase"></span></div>
+        <div id="expected" class="secondary"></div>
+        <div id="binary" class="secondary"></div>
+        <div class="keys secondary">
+          <div class="port-key"><span class="port-mark input"></span>A / B · input locations</div>
+          <div class="port-key"><span class="port-mark"></span>O · output locations</div>
+        </div>
+      </aside>
+    </div>
+    <div id="inspector">Select a cell to inspect its raw channel values.</div>
+    <div class="playback">
+      <button id="play" type="button">Play</button>
+      <button id="previous" type="button" aria-label="Previous step">−1 step</button>
+      <input id="step" type="range" min="0" max="0" value="0" step="1" aria-label="Evolution step">
+      <button id="next" type="button" aria-label="Next step">+1 step</button>
+      <label>Speed <select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+    </div>
+    <div id="window-bar" aria-hidden="true"></div>
+    <div id="window-labels" class="secondary" aria-label="Training window reference"></div>
+    <footer class="secondary"><span id="geometry"></span><span id="model"></span></footer>
+  </section>
 </main>
 <script>
+(() => {
+  'use strict';
+  const settings = {{ config | tojson }};
+  const embedded = {{ embedded_data | tojson }};
+  const frameDuration = {{ duration_ms | tojson }};
   const $ = id => document.getElementById(id);
-  let data = null;
-  let timer = null;
+  const canvas = $('grid');
+  const context = canvas.getContext('2d');
+  let data = null, index = 0, timer = null, selected = null, hovered = null, geometry = null;
+  let roles = new Map();
 
-  async function initialize() {
-    const config = await fetch('/api/config').then(response => response.json());
-    $('bits').value = config.bits;
-    $('steps').value = config.steps;
-    $('status').textContent = `${config.checkpoint}, update ${config.update}, ${config.channels} channels`;
-    await run();
+  function phaseAt(step) {
+    if (step <= data.free_steps) return 'Free evolution';
+    if (step <= data.supervision_end) return 'Supervision window';
+    return 'Beyond training window';
   }
 
-  async function run() {
-    stop();
-    $('status').textContent = 'running inference...';
-    const response = await fetch('/api/infer', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        bits: Number($('bits').value),
-        a: Number($('a').value),
-        b: Number($('b').value),
-        steps: Number($('steps').value)
-      })
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      $('status').textContent = result.error;
-      return;
+  function scalarColor(value) {
+    const t = Math.tanh(value), neutral = [128, 128, 128];
+    const end = t < 0 ? [39, 109, 187] : [231, 143, 45];
+    return `rgb(${neutral.map((v, c) => Math.round(v + (end[c] - v) * Math.abs(t))).join(',')})`;
+  }
+
+  function rgbColor(values) {
+    return `rgb(${values.map(v => Math.round((Math.tanh(v) + 1) * 127.5)).join(',')})`;
+  }
+
+  function legend() {
+    const rgb = $('view').value === 'rgb';
+    const values = [-3, -1, 0, 1, 3];
+    const ticks = '<div class="ticks"><span style="left:11.92%">−1</span><span style="left:50%">0</span><span style="left:88.08%">+1</span></div>';
+    if (rgb) {
+      $('legend').innerHTML = ['R · ch0', 'G · ch1', 'B · ch2'].map((name, channel) => {
+        const stops = values.map(value => {
+          const components = [0, 0, 0]; components[channel] = channel < data.channels ? value : 0;
+          return `${rgbColor(components)} ${(Math.tanh(value) + 1) * 50}%`;
+        }).join(',');
+        return `<div class="legend-row"><span>${channel < data.channels ? name : name.slice(0, 1) + ' · 0'}</span><div class="scale" style="background:linear-gradient(to right,${stops})"></div></div>`;
+      }).join('') + `<div style="margin-left:71px">${ticks}</div><span>Zero in all channels → gray.</span>`;
+    } else {
+      const stops = values.map(v => `${scalarColor(v)} ${(Math.tanh(v) + 1) * 50}%`).join(',');
+      const encoding = Number($('view').value) === data.input_channel ? ' · −1: bit 0 · +1: bit 1' : '';
+      $('legend').innerHTML = `<div class="scale" style="background:linear-gradient(to right,${stops})"></div>${ticks}<span>Fixed tanh scale${encoding}</span>`;
     }
-    data = result;
-    $('step').max = data.frames.length - 1;
-    $('step').value = 0;
-    $('status').textContent = `expected ${data.expected}; RGB = tanh(channels 0, 1, 2)`;
-    draw(0);
   }
 
-  function draw(index) {
+  function showInspector() {
+    const cell = selected || hovered;
+    if (!cell) { $('inspector').textContent = 'Select a cell to inspect its raw channel values.'; return; }
+    const [row, column] = cell;
+    const values = data.states[index].map((channel, c) => `ch${c} ${channel[row][column].toPrecision(5)}`);
+    $('inspector').textContent = `row ${row}, col ${column} · ${roles.get(`${row},${column}`) || 'background location'} · ${values.join(' · ')}`;
+  }
+
+  function draw(step) {
     if (!data) return;
-    const canvas = $('grid');
-    const scale = Math.max(4, Math.floor(700 / data.width));
-    canvas.width = data.width * scale;
-    canvas.height = data.height * scale;
-    const context = canvas.getContext('2d');
-    const frame = data.frames[index];
-    for (let y = 0; y < data.height; y++) {
-      for (let x = 0; x < data.width; x++) {
-        const [r, g, b] = frame[y][x];
-        context.fillStyle = `rgb(${r},${g},${b})`;
-        context.fillRect(x * scale, y * scale, scale, scale);
+    index = Math.max(0, Math.min(data.steps, step));
+    const width = canvas.parentElement.clientWidth;
+    if (width <= 90) return;
+    const nonCanvasHeight = Math.ceil(document.querySelector('main').getBoundingClientRect().height - canvas.getBoundingClientRect().height) + 36;
+    const canvasLimit = embedded !== null ? Math.max(160, window.innerHeight - nonCanvasHeight) : 696;
+    const size = Math.min(40, (width - 90) / data.width, Math.min(660, canvasLimit - 36) / data.height);
+    const left = 12, top = 30, height = top + size * data.height + 6;
+    geometry = {size, left, top};
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
+    canvas.style.height = `${height}px`;
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const mode = $('view').value;
+    for (let row = 0; row < data.height; row++) for (let col = 0; col < data.width; col++) {
+      context.fillStyle = mode === 'rgb' ? `rgb(${data.frames[index][row][col].join(',')})` : scalarColor(data.states[index][Number(mode)][row][col]);
+      context.fillRect(left + col * size, top + row * size, size + .2, size + .2);
+      context.strokeStyle = 'rgba(0,0,0,.12)'; context.lineWidth = .5;
+      context.strokeRect(left + col * size, top + row * size, size, size);
+    }
+    context.font = '12px system-ui, sans-serif';
+    const foreground = getComputedStyle(document.body).color;
+    for (const [group, label] of [['a', 'A'], ['b', 'B'], ['output', 'O']]) {
+      context.fillStyle = foreground; context.textAlign = 'center';
+      context.fillText(label, left + (data.ports[group][0][1] + .5) * size, 17);
+      if ($('ports').checked) for (const [row, col] of data.ports[group]) {
+        const inset = Math.min(1.5, size * .15);
+        context.setLineDash(group === 'output' ? [] : [3, 2]);
+        for (const [color, strokeWidth] of [['#171c22', 3], ['#ffffff', 1.3]]) {
+          context.strokeStyle = color; context.lineWidth = Math.min(strokeWidth, size * .2);
+          context.strokeRect(left + col * size + inset, top + row * size + inset, size - 2 * inset, size - 2 * inset);
+        }
       }
     }
-    $('time').textContent = `t = ${index}`;
-    $('output').textContent = `out = ${data.outputs[index]}`;
-    $('step').value = index;
+    context.setLineDash([]); context.fillStyle = foreground; context.textAlign = 'left';
+    data.ports.output.forEach(([row], bit) => context.fillText(`2^${data.bits - bit}${bit === 0 ? ' carry' : ''}`, left + data.width * size + 6, top + (row + .5) * size + 4));
+    if (selected) {
+      context.strokeStyle = '#ffff5c'; context.lineWidth = 2;
+      context.strokeRect(left + selected[1] * size + .5, top + selected[0] * size + .5, size - 1, size - 1);
+    }
+    $('decoded').textContent = data.outputs[index];
+    $('time').textContent = `t = ${index} / ${data.steps}`;
+    $('phase').textContent = phaseAt(index); $('phase').dataset.phase = phaseAt(index);
+    $('binary').textContent = `Bits: ${data.outputs[index].toString(2).padStart(data.bits + 1, '0')} · target ${data.expected.toString(2).padStart(data.bits + 1, '0')}`;
+    $('step').value = index; $('previous').disabled = index === 0; $('next').disabled = index === data.steps;
+    showInspector();
   }
 
-  function stop() {
-    if (timer !== null) clearInterval(timer);
-    timer = null;
-    $('play').textContent = 'play';
+  function windowReference() {
+    const total = Math.max(1, data.steps), freeEnd = Math.min(data.free_steps, total), end = Math.min(data.supervision_end, total);
+    const a = freeEnd / total * 100, b = end / total * 100;
+    $('window-bar').style.background = `linear-gradient(to right,#bb6666 0% ${a}%,#829cad ${a}% ${b}%,#a7a7a7 ${b}% 100%)`;
+    const labels = [];
+    if (data.free_steps) labels.push(`Free evolution · 1–${data.free_steps}`);
+    labels.push(`Training supervision · ${data.supervision_start}–${data.supervision_end}`);
+    if (data.steps > data.supervision_end) labels.push(`Beyond training · ${data.supervision_end + 1}–${data.steps}`);
+    $('window-labels').replaceChildren(...labels.map(text => { const span = document.createElement('span'); span.textContent = text; return span; }));
   }
 
-  function togglePlay() {
-    if (!data) return;
-    if (timer !== null) { stop(); return; }
-    $('play').textContent = 'pause';
-    timer = setInterval(() => {
-      const next = (Number($('step').value) + 1) % data.frames.length;
-      draw(next);
-    }, 80);
+  function load(result) {
+    stop(); data = result; selected = null; hovered = null; index = 0;
+    roles = new Map();
+    for (const [group, label] of [['a', 'A'], ['b', 'B'], ['output', 'O']]) data.ports[group].forEach(([row, col], i, cells) => roles.set(`${row},${col}`, `${label} · bit ${cells.length - i - 1}${group === 'output' && i === 0 ? ' (carry)' : ''}`));
+    $('view').replaceChildren(new Option('RGB overview', 'rgb'), ...Array.from({length: data.channels}, (_,c) => new Option(`Channel ${c}${c === data.input_channel ? ' · I/O' : ''}`, String(c))));
+    $('viewer').hidden = false;
+    $('step').max = data.steps; $('play').disabled = data.steps === 0;
+    $('operands').textContent = `${data.bits}-bit · A = ${data.a} · B = ${data.b}`;
+    $('expected').textContent = `Expected: ${data.a} + ${data.b} = ${data.expected}`;
+    $('geometry').textContent = `${data.height} × ${data.width} cells · ${data.channels} channels · trained on ${data.trained_bits} bits`;
+    $('model').textContent = `Inputs ${data.input_mode} · fire rate ${data.fire_rate}`;
+    legend(); windowReference(); draw(0);
   }
 
-  $('run').addEventListener('click', run);
-  $('play').addEventListener('click', togglePlay);
-  $('step').addEventListener('input', event => { stop(); draw(Number(event.target.value)); });
-  initialize().catch(error => { $('status').textContent = error; });
+  function stop() { if (timer !== null) clearInterval(timer); timer = null; $('play').textContent = 'Play'; }
+  function start() {
+    if (!data || data.steps === 0) return;
+    if (index === data.steps) draw(0);
+    $('play').textContent = 'Pause';
+    timer = setInterval(() => { draw(index + 1); if (index === data.steps) stop(); }, frameDuration / Number($('speed').value));
+  }
+  $('play').addEventListener('click', () => { if (timer !== null) stop(); else start(); });
+  $('speed').addEventListener('change', () => { if (timer !== null) { stop(); start(); } });
+  $('step').addEventListener('input', () => { stop(); draw(Number($('step').value)); });
+  $('previous').addEventListener('click', () => { stop(); draw(index - 1); });
+  $('next').addEventListener('click', () => { stop(); draw(index + 1); });
+  $('view').addEventListener('change', () => { legend(); draw(index); });
+  $('ports').addEventListener('change', () => draw(index));
+
+  function hit(event) {
+    if (!data || !geometry) return null;
+    const rect = canvas.getBoundingClientRect();
+    const column = Math.floor((event.clientX - rect.left - geometry.left) / geometry.size);
+    const row = Math.floor((event.clientY - rect.top - geometry.top) / geometry.size);
+    return row >= 0 && row < data.height && column >= 0 && column < data.width ? [row, column] : null;
+  }
+  canvas.addEventListener('pointermove', event => { hovered = hit(event); showInspector(); });
+  canvas.addEventListener('pointerleave', () => { hovered = null; showInspector(); });
+  canvas.addEventListener('click', event => { const cell = hit(event); selected = cell && String(cell) !== String(selected) ? cell : null; draw(index); });
+  new ResizeObserver(() => draw(index)).observe(canvas.parentElement);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => draw(index));
+  window.addEventListener('pagehide', stop);
+
+  async function run() {
+    stop(); $('run').disabled = true; $('loading').hidden = false; $('error').hidden = true; $('viewer').hidden = true;
+    try {
+      const response = await fetch('/api/infer', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({bits: Number($('bits').value), a: Number($('a').value), b: Number($('b').value), steps: Number($('steps').value)})});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Inference failed');
+      load(result);
+    } catch (error) { $('error').textContent = error.message; $('error').hidden = false; }
+    finally { $('loading').hidden = true; $('run').disabled = false; }
+  }
+  $('checkpoint').textContent = settings.checkpoint ? `${settings.checkpoint} · update ${settings.update}` : 'Notebook inference';
+  if (embedded !== null) load(embedded);
+  else {
+    $('bits').value = settings.bits; $('steps').value = settings.steps;
+    const setMaximum = () => { const max = 2 ** Number($('bits').value) - 1; $('a').max = max; $('b').max = max; };
+    setMaximum(); $('a').value = Math.min(3, Number($('a').max)); $('b').value = Math.min(5, Number($('b').max));
+    $('bits').addEventListener('input', setMaximum);
+    $('inference').addEventListener('submit', event => { event.preventDefault(); run(); });
+    run();
+  }
+})();
 </script>
 </body>
 </html>
