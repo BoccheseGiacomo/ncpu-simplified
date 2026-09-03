@@ -90,8 +90,26 @@ def test_training_is_reproducible_with_an_isolated_data_generator():
         assert torch.equal(first_parameter, second_parameter)
 
 
-def test_checkpoint_resume_matches_uninterrupted_training(tmp_path):
-    config = tiny_config()
+@pytest.mark.parametrize(
+    "device",
+    [
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA is unavailable"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("fire_rate", [1.0, 0.5])
+def test_checkpoint_resume_matches_uninterrupted_training(tmp_path, device, fire_rate):
+    base = tiny_config()
+    config = replace(
+        base,
+        model=replace(base.model, fire_rate=fire_rate),
+        training=replace(base.training, device=device),
+    )
     uninterrupted = Trainer(config)
     for _ in range(4):
         uninterrupted.train_step()
@@ -101,7 +119,15 @@ def test_checkpoint_resume_matches_uninterrupted_training(tmp_path):
         interrupted.train_step()
     checkpoint = tmp_path / "resume.pt"
     interrupted.save(checkpoint)
-    resumed = Trainer.from_checkpoint(checkpoint, device="cpu")
+    expected_data = torch.rand(4, generator=interrupted.data_generator)
+    expected_cpu = torch.rand(4)
+    expected_device = torch.rand(4, device=device)
+    resumed = Trainer.from_checkpoint(checkpoint, device=device)
+    assert torch.equal(torch.rand(4, generator=resumed.data_generator), expected_data)
+    assert torch.equal(torch.rand(4), expected_cpu)
+    assert torch.equal(torch.rand(4, device=device), expected_device)
+    resumed = Trainer.from_checkpoint(checkpoint)
+    assert resumed.device.type == device
     for _ in range(2):
         resumed.train_step()
 
@@ -126,9 +152,15 @@ def test_short_fit_writes_loadable_best_and_latest_checkpoints(tmp_path):
     assert len(restored.history) == config.training.updates
 
 
-def test_batched_exhaustive_validation_matches_evaluator():
-    config = tiny_config()
+@pytest.mark.parametrize("input_mode", ["mutable", "frozen"])
+def test_batched_exhaustive_validation_matches_evaluator(input_mode):
+    base = tiny_config()
+    config = replace(base, model=replace(base.model, input_mode=input_mode))
     trainer = Trainer(config)
+    with torch.no_grad():
+        trainer.model.rule.hidden.weight.zero_()
+        trainer.model.rule.hidden.bias.fill_(1.0)
+        trainer.model.rule.output.weight[config.model.output_channel].fill_(0.01)
 
     validation_loss = trainer.validation_loss()
     result = evaluate(
@@ -142,6 +174,26 @@ def test_batched_exhaustive_validation_matches_evaluator():
     )
 
     assert validation_loss == pytest.approx(result.mean_mse)
+    assert validation_loss != pytest.approx(1.0)
+
+
+@pytest.mark.parametrize("channels", [2, 3, 5])
+def test_frozen_training_updates_the_output_with_nonzero_task_gradients(
+    channels, monkeypatch
+):
+    base = tiny_config()
+    trainer = Trainer(
+        replace(base, model=replace(base.model, channels=channels, input_mode="frozen"))
+    )
+    inputs, targets = trainer.layout.render_batch(*trainer.layout.operand_pairs())
+    monkeypatch.setattr(trainer, "_sample_batch", lambda: (inputs, targets))
+    before = trainer.model.rule.output.weight.detach().clone()
+    metric = trainer.train_step()
+    assert metric.gradient_norm > 0
+    after = trainer.model.rule.output.weight
+    assert torch.equal(before[0], after[0])
+    assert not torch.equal(before[1], after[1])
+    assert trainer.model.rule.output.weight.grad[1].abs().sum() > 0
 
 
 def test_multiple_seeds_share_hyperparameters_and_select_one_best(tmp_path):

@@ -47,6 +47,12 @@ only at the beginning. All three channels can then evolve, including channel
 0, while channels 1 and 2 provide additional space for computation and memory.
 There are no hand-written carry rules or connections between distant bits.
 
+With `input_mode='frozen'`, channel 0 instead stays read-only and channel 1
+holds the evolving output; channels 2 onward are additional memory. These
+roles use the existing `channels=K`, not an extra channel (`K` must be at least
+2). Mutable mode keeps input and output in the same channel. Training,
+evaluation, and the viewer all use `config.model.output_channel` for readout.
+
 Training unrolls these local updates through time. The model first evolves
 freely, then receives supervision over a window of steps rather than only at
 one final instant. The loss is mean squared error over output cells, examples,

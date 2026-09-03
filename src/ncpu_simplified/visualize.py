@@ -37,6 +37,7 @@ def _viewer_config(config: ExperimentConfig) -> dict:
         "supervision_end": config.training.supervision_end,
         "channels": config.model.channels,
         "input_channel": config.model.input_channel,
+        "output_channel": config.model.output_channel,
         "input_mode": config.model.input_mode,
         "fire_rate": config.model.fire_rate,
     }
@@ -89,7 +90,7 @@ def rollout_payload(
         if type(operand) is not int or not 0 <= operand < (1 << layout.bits):
             raise ValueError("operands must be integers within the layout bit width")
     states = rollout.detach().cpu()
-    outputs = layout.decode_output(states[:, config.model.input_channel])
+    outputs = layout.decode_output(states[:, config.model.output_channel])
     return {
         **_viewer_config(config),
         "bits": layout.bits,

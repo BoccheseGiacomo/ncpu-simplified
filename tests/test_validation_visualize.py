@@ -58,6 +58,19 @@ def test_validation_is_not_tied_to_default_geometry_or_hidden_width():
     assert report.successful
 
 
+def test_validation_checks_the_frozen_task_readout_and_detects_regression(monkeypatch):
+    config = replace(small_config(), model=ModelConfig(input_mode="frozen"))
+    validate(config).require_success()
+    monkeypatch.setattr(
+        ModelConfig, "output_channel", property(lambda self: self.input_channel)
+    )
+    report = validate(config)
+    assert not report.successful
+    assert not next(
+        c for c in report.checks if c.name == "finite non-zero gradients"
+    ).passed
+
+
 def test_rgb_conversion_uses_three_channels_and_valid_byte_range():
     rollout = torch.tensor(
         [[[[0.0]], [[1.0]], [[-1.0]]], [[[10.0]], [[-10.0]], [[0.0]]]]
@@ -171,6 +184,29 @@ def test_payload_reads_the_configured_channel():
     row, column = layout.output_coordinates[-1]
     states[0, 2, row, column] = 1
     assert rollout_payload(states, layout, config, 0, 1)["outputs"] == [1]
+
+
+def test_frozen_server_and_notebook_decode_channel_one_without_extra_channels(tmp_path):
+    config = replace(small_config(), model=ModelConfig(channels=3, input_mode="frozen"))
+    trainer = Trainer(config)
+    with torch.no_grad():
+        trainer.model.rule.hidden.weight.zero_()
+        trainer.model.rule.hidden.bias.fill_(1.0)
+        trainer.model.rule.output.weight[1].fill_(0.01)
+    checkpoint = tmp_path / "frozen.pt"
+    trainer.save(checkpoint)
+    client = create_app(checkpoint, device="cpu").test_client()
+    data = client.post("/api/infer", json={"a": 1, "b": 0, "steps": 3}).json
+    assert data["channels"] == 3
+    assert (data["input_channel"], data["output_channel"]) == (0, 1)
+    assert data["outputs"] == [0, 3, 3, 3]
+    states = torch.tensor(data["states"])
+    assert torch.equal(states[:, 0], states[:1, 0].expand_as(states[:, 0]))
+    layout = InterleavedLayout(config.geometry)
+    payload = rollout_payload(states, layout, config, 1, 0)
+    assert payload["outputs"] == data["outputs"]
+    player = notebook_viewer(states, layout, config, 1, 0)
+    assert "&quot;output_channel&quot;: 1" in player._repr_html_()
 
 
 def test_payload_does_not_change_double_precision_values_or_decoding():

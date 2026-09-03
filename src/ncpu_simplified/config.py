@@ -50,6 +50,10 @@ class ModelConfig:
     max_abs_state: float | None = 10.0
     random_kernel_seed: int = 0
 
+    @property
+    def output_channel(self) -> int:
+        return 1 if self.input_mode == "frozen" else self.input_channel
+
     def validate(self) -> None:
         if self.channels < 1:
             raise ValueError("channels must be at least 1")
@@ -82,6 +86,8 @@ class ModelConfig:
             raise ValueError(
                 "a frozen input requires at least one additional mutable channel"
             )
+        if self.input_mode == "frozen" and self.input_channel != 0:
+            raise ValueError("frozen mode uses input channel 0 and output channel 1")
         if self.padding not in {"zeros", "reflect", "replicate", "circular"}:
             raise ValueError("unsupported padding mode")
         if self.max_abs_state is not None and self.max_abs_state <= 0:

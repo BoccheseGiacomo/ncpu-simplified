@@ -95,6 +95,26 @@ def test_mutable_input_channel_can_evolve():
     assert not torch.equal(evolved[:, 0], initial[:, 0])
 
 
+@pytest.mark.parametrize("channels", [2, 3, 5])
+@pytest.mark.parametrize("fire_rate", [1.0, 0.5])
+def test_frozen_input_is_preserved_even_with_state_clipping(channels, fire_rate):
+    config = ModelConfig(
+        channels=channels, input_mode="frozen", max_abs_state=0.5, fire_rate=fire_rate
+    )
+    model = NeuralCellularAutomaton(config)
+    mutable = NeuralCellularAutomaton(ModelConfig(channels=channels))
+    assert model.parameter_count == mutable.parameter_count
+    inputs = torch.tensor([[[-1.0, 1.0], [1.0, -1.0]]])
+    initial = model.initial_state(inputs)
+    assert initial.shape[1] == channels
+    assert torch.count_nonzero(initial[:, 1:]) == 0
+    with torch.no_grad():
+        model.rule.output.weight.fill_(0.2)
+    rollout = model(initial, 3)
+    assert torch.equal(rollout[:, :, 0], inputs.unsqueeze(1).expand(-1, 4, -1, -1))
+    assert torch.all(rollout[:, :, 1:].abs() <= 0.5)
+
+
 def test_default_fire_rate_updates_every_cell_without_sampling(monkeypatch):
     model = NeuralCellularAutomaton(ModelConfig())
     state = torch.zeros(2, 3, 2, 2)

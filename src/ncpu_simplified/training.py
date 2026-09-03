@@ -186,7 +186,7 @@ class Trainer:
             rollout,
             targets,
             self.layout,
-            self.config.model.input_channel,
+            self.config.model.output_channel,
             self.config.training.free_steps,
             self.config.training.supervision_steps,
         )
@@ -218,7 +218,7 @@ class Trainer:
 
         with torch.no_grad():
             final_values = self.layout.read_output_values(
-                rollout[:, -1, self.config.model.input_channel]
+                rollout[:, -1, self.config.model.output_channel]
             )
             target_values = self.layout.read_output_values(targets)
             exact = ((final_values > 0) == (target_values > 0)).all(dim=1)
@@ -256,7 +256,7 @@ class Trainer:
                     rollout,
                     targets,
                     self.layout,
-                    self.config.model.input_channel,
+                    self.config.model.output_channel,
                     self.config.training.free_steps,
                     self.config.training.supervision_steps,
                 )
@@ -347,8 +347,8 @@ class Trainer:
 
     @classmethod
     def from_checkpoint(cls, path: str | Path, device: str | None = None) -> "Trainer":
-        load_device = resolve_device(device or "auto")
-        checkpoint = torch.load(path, map_location=load_device, weights_only=False)
+        # RNG states must stay on CPU; model/optimizer loading handles device transfer.
+        checkpoint = torch.load(path, map_location="cpu", weights_only=False)
         if checkpoint.get("format_version") != 1:
             raise ValueError("unsupported checkpoint format")
         config_data = checkpoint["config"]
@@ -367,7 +367,7 @@ class Trainer:
         trainer.data_generator.set_state(checkpoint["data_rng_state"])
         torch.set_rng_state(checkpoint["torch_rng_state"])
         random.setstate(checkpoint["python_rng_state"])
-        if load_device.type == "cuda" and "cuda_rng_state" in checkpoint:
+        if trainer.device.type == "cuda" and "cuda_rng_state" in checkpoint:
             torch.cuda.set_rng_state_all(checkpoint["cuda_rng_state"])
         return trainer
 

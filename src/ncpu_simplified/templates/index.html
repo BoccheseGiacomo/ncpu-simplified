@@ -148,7 +148,7 @@
       }).join('') + `<div style="margin-left:71px">${ticks}</div><span>Zero in all channels → gray.</span>`;
     } else {
       const stops = values.map(v => `${scalarColor(v)} ${(Math.tanh(v) + 1) * 50}%`).join(',');
-      const encoding = Number($('view').value) === data.input_channel ? ' · −1: bit 0 · +1: bit 1' : '';
+      const encoding = [data.input_channel, data.output_channel].includes(Number($('view').value)) ? ' · −1: bit 0 · +1: bit 1' : '';
       $('legend').innerHTML = `<div class="scale" style="background:linear-gradient(to right,${stops})"></div>${ticks}<span>Fixed tanh scale${encoding}</span>`;
     }
   }
@@ -225,7 +225,10 @@
     stop(); data = result; selected = null; hovered = null; index = 0;
     roles = new Map();
     for (const [group, label] of [['a', 'A'], ['b', 'B'], ['output', 'O']]) data.ports[group].forEach(([row, col], i, cells) => roles.set(`${row},${col}`, `${label} · bit ${cells.length - i - 1}${group === 'output' && i === 0 ? ' (carry)' : ''}`));
-    $('view').replaceChildren(new Option('RGB overview', 'rgb'), ...Array.from({length: data.channels}, (_,c) => new Option(`Channel ${c}${c === data.input_channel ? ' · I/O' : ''}`, String(c))));
+    $('view').replaceChildren(new Option('RGB overview', 'rgb'), ...Array.from({length: data.channels}, (_,c) => {
+      const role = c === data.input_channel ? (c === data.output_channel ? 'I/O' : 'Input') : (c === data.output_channel ? 'Output' : 'Memory');
+      return new Option(`Channel ${c} · ${role}`, String(c));
+    }));
     $('viewer').hidden = false;
     $('step').max = data.steps; $('play').disabled = data.steps === 0;
     $('operands').textContent = `${data.bits}-bit · A = ${data.a} · B = ${data.b}`;

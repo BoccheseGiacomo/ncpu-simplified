@@ -38,6 +38,7 @@ def test_invalid_geometry_is_rejected(config):
         ModelConfig(input_channel=3),
         ModelConfig(input_mode="invalid"),
         ModelConfig(channels=1, input_mode="frozen"),
+        ModelConfig(input_mode="frozen", input_channel=1),
     ],
 )
 def test_invalid_model_configuration_is_rejected(config):
@@ -62,6 +63,18 @@ def test_configuration_round_trip_preserves_tuples_and_values():
 
     assert restored == original
     assert isinstance(restored.model.fixed_kernels, tuple)
+
+
+@pytest.mark.parametrize("channels", [2, 3, 5])
+def test_frozen_channel_roles_do_not_add_channels_or_checkpoint_fields(channels):
+    config = ExperimentConfig(model=ModelConfig(channels=channels, input_mode="frozen"))
+    config.validate()
+    assert config.model.input_channel == 0
+    assert config.model.output_channel == 1
+    assert config.model.channels == channels
+    assert "output_channel" not in config.to_dict()["model"]
+    assert ExperimentConfig.from_dict(config.to_dict()) == config
+    assert ModelConfig(input_channel=2).output_channel == 2
 
 
 def test_default_layout_matches_the_single_cell_geometry():

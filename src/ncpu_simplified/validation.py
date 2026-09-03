@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
@@ -55,7 +55,8 @@ class ValidationReport:
             f"{layout.height}x{layout.width}, "
             f"stride=({geometry.sx}, {geometry.sy})\n"
             f"model: {model.channels} channels, hidden={model.hidden_size}, "
-            f"gate={model.gate}, input={model.input_channel}/{model.input_mode}\n"
+            f"gate={model.gate}, input={model.input_channel}/{model.input_mode}, "
+            f"output={model.output_channel}\n"
             f"fixed kernels: {', '.join(model.fixed_kernels) or 'none'}"
             f"{' + laplacian' if model.fixed_laplacian else ''}\n"
             f"learnable kernels: {model.learnable_kernels} "
@@ -160,6 +161,8 @@ def validate(
         actual = float(model.update_mask[0, config.model.input_channel, 0, 0])
         if actual != expected:
             raise AssertionError("input-channel update mask contradicts input_mode")
+        if float(model.update_mask[0, config.model.output_channel, 0, 0]) != 1.0:
+            raise AssertionError("the output channel must be mutable")
 
     check("input-channel mutability", mutability_check)
 
@@ -174,12 +177,12 @@ def validate(
         target = targets[:1]
         start = config.training.supervision_start
         end = config.training.supervision_end + 1
-        sequence[:, start:end, config.model.input_channel] = target.unsqueeze(1)
+        sequence[:, start:end, config.model.output_channel] = target.unsqueeze(1)
         loss = supervised_loss(
             sequence,
             target,
             layout,
-            config.model.input_channel,
+            config.model.output_channel,
             config.training.free_steps,
             config.training.supervision_steps,
         )
@@ -191,7 +194,10 @@ def validate(
     def gradient_check() -> None:
         with torch.random.fork_rng():
             torch.manual_seed(1729)
-            probe = NeuralCellularAutomaton(config.model).to(device)
+            # Test the readout gradient independently of stochastic cell firing.
+            probe = NeuralCellularAutomaton(replace(config.model, fire_rate=1.0)).to(
+                device
+            )
             initial = torch.rand(
                 1,
                 config.model.channels,
@@ -200,15 +206,9 @@ def validate(
                 device=device,
             ).sub(0.5)
         rollout = probe(initial, 1)
-        mutable_channels = [
-            channel
-            for channel in range(config.model.channels)
-            if not (
-                config.model.input_mode == "frozen"
-                and channel == config.model.input_channel
-            )
-        ]
-        loss = (rollout[:, -1, mutable_channels] - 1.0).square().mean()
+        loss = supervised_loss(
+            rollout, targets[:1].to(device), layout, config.model.output_channel, 0, 1
+        )
         loss.backward()
         gradients = [
             parameter.grad

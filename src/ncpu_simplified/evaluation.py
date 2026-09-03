@@ -86,7 +86,7 @@ def evaluate(
                 targets = targets.to(device)
                 rollout = model(model.initial_state(inputs), steps)
                 values = layout.read_output_values(
-                    rollout[:, :, model.config.input_channel]
+                    rollout[:, :, model.config.output_channel]
                 )
                 expected = layout.read_output_values(targets).unsqueeze(1)
                 correct_bits = (values > 0) == (expected > 0)

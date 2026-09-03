@@ -166,10 +166,14 @@ class NeuralCellularAutomaton(nn.Module):
                 < self.config.fire_rate
             )
             delta = delta * fire_mask
-        state = state + delta
+        updated = state + delta
         if self.config.max_abs_state is not None:
-            state = state.clamp(-self.config.max_abs_state, self.config.max_abs_state)
-        return state
+            updated = updated.clamp(
+                -self.config.max_abs_state, self.config.max_abs_state
+            )
+        if self.config.input_mode == "frozen":
+            updated = torch.where(self.update_mask.bool(), updated, state)
+        return updated
 
     def forward(self, initial_state: torch.Tensor, steps: int) -> torch.Tensor:
         if steps < 0:
